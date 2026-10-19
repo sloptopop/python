@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the full quality gate before every push.
+# Enable with: git config core.hooksPath .githooks
+exec "$(git rev-parse --show-toplevel)/scripts/gate.sh"

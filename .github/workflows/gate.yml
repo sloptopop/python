@@ -1,0 +1,53 @@
+name: gate
+
+# Runs the full scripts/gate.sh (every item of the sloptopop standard; see
+# LANGUAGE.md): pinned uv/Python/osv-scanner, format, zero warnings, all tests
+# against a freshly built sloptopop binary, 100% coverage, every mutant
+# killed, vulnerability and licence checks, the coverage-gated build, hooks.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      OSV_SCANNER_VERSION: 2.6.0
+      SLOPTOPOP_GATE_JOBS: 3
+    steps:
+      # Same layout as a local checkout: python/ next to cli/.
+      - uses: actions/checkout@v4
+        with:
+          path: python
+      - uses: actions/checkout@v4
+        with:
+          repository: sloptopop/cli
+          path: cli
+      # rustup on the runner reads cli/rust-toolchain.toml and installs the
+      # pinned toolchain on first use.
+      - name: Build the sloptopop binary
+        working-directory: cli
+        run: cargo build --locked
+      # uv pinned to [tool.uv] required-version; uv installs the Python in
+      # .python-version itself.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+      - name: Install osv-scanner
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          chmod +x "$HOME/.local/bin/osv-scanner"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The gate checks that the pre-push hook is enabled, as on a dev machine.
+      - name: Enable the pre-push hook
+        working-directory: python
+        run: git config core.hooksPath .githooks
+      - name: Gate
+        working-directory: python
+        env:
+          SLOPTOPOP_BIN: ${{ github.workspace }}/cli/target/debug/sloptopop
+          SLOPTOPOP_CONFORMANCE_DIR: ${{ github.workspace }}/cli/conformance/cases
+        run: scripts/gate.sh

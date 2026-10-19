@@ -1,14 +1,169 @@
 [project]
 name = "sloptopop"
 version = "0.1.0"
-description = "Add your description here"
+description = "Python client for the sloptopop binary (JSON-RPC over stdio)"
 readme = "README.md"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 authors = [
-    { name = "Nicholas Novelle", email = "novellenicholas@gmail.com" }
+    { name = "Nicholas Novelle" }
 ]
 requires-python = ">=3.14"
 dependencies = []
+classifiers = ["Typing :: Typed"]
+
+[project.scripts]
+sloptopop = "sloptopop._cli:main"
 
 [build-system]
-requires = ["uv_build>=0.13.0,<0.14.0"]
-build-backend = "uv_build"
+# hatch_build.py refuses to build a wheel or sdist unless every test passes
+# at 100% coverage (editable installs exempt; see its docstring).
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sloptopop"]
+
+[tool.hatch.build.targets.sdist]
+# Everything the build hook needs to run the tests again from the sdist.
+include = [
+    "/src",
+    "/tests",
+    "/examples",
+    "/hatch_build.py",
+    "/uv.lock",
+    "/.python-version",
+    "/README.md",
+    "/LICENSE-MIT",
+    "/LICENSE-APACHE",
+]
+
+[tool.uv]
+# The gate's own tools are pinned by uv.lock; uv itself is pinned here.
+required-version = "==0.13.0"
+
+[dependency-groups]
+dev = [
+    "hatchling>=1.32.4",
+    "mutmut>=3.8.0",
+    "mypy>=2.4.0",
+    "pip-audit>=2.10.1",
+    "pip-licenses>=5.5.5",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+# mutmut's scratch copy of the sources.
+extend-exclude = ["mutants"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Pairs of mutually exclusive docstring rules: keep D211 and D212.
+    "D203",
+    "D213",
+    # Conflicts with `ruff format` (the formatter owns trailing commas).
+    "COM812",
+    # Licensing is stated once in LICENSE-MIT / LICENSE-APACHE, not per file.
+    "CPY001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = [
+    # Gate scripts are standalone, not a package.
+    "INP001",
+]
+"examples/**" = [
+    # Examples are standalone scripts, not a package.
+    "INP001",
+    # Printing is what examples do.
+    "T201",
+]
+"tests/**" = [
+    # pytest collects tests/ as rootdir-relative modules, not a package.
+    "INP001",
+    # pytest is built on assert.
+    "S101",
+    # Tests compare against literal expected values on purpose.
+    "PLR2004",
+    # Tests run the binary and fake binaries they build themselves.
+    "S603",
+    # Test names say what they test; docstrings would repeat them.
+    "D100",
+    "D103",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
+files = ["src", "tests", "examples", "hatch_build.py", "scripts"]
+
+[tool.pytest]
+minversion = "9.0"
+testpaths = ["tests"]
+# The build hook (hatch_build.py) lives at the root and is tested too.
+pythonpath = ["."]
+strict = true
+filterwarnings = ["error"]
+# Wall-clock limit per test: a change that makes a read block forever (e.g.
+# a mutant) fails instead of hanging. The slowest test takes about a second.
+timeout = "15"
+empty_parameter_set_mark = "fail_at_collect"
+addopts = [
+    "--cov",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
+]
+
+[tool.coverage.run]
+branch = true
+# Product code: the package and the build hook. Only tests are excluded.
+source = ["sloptopop", "hatch_build"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false
+
+[tool.mutmut]
+source_paths = ["src/sloptopop", "hatch_build.py"]
+also_copy = ["examples", "src"]
+# Coverage is checked by the test step; under mutmut it would only fail runs.
+pytest_add_cli_args = ["--no-cov"]
+
+[tool.sloptopop.licences]
+# Read by scripts/check_licences.py. Every distribution in uv.lock (runtime and
+# dev) must be licensed under these SPDX ids (STANDARDS.md item 8).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "0BSD",
+    "Zlib",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "PSF-2.0",
+    "BlueOak-1.0.0",
+    "BSL-1.0",
+]
+# dev-only exceptions: tools used only to develop/test, under a licence NOT on
+# the allow-list, kept for the user to decide on. Each entry:
+#   { package = "name", licence = "exact licence string", reason = "why" }
+# Currently none: every dependency is allow-listed.
+dev-only-exceptions = []
